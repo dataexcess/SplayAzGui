@@ -1,5 +1,6 @@
 (
 //-STEP-1 server stuff
+
 ServerTree.removeAll;
 
 s.options.numOutputBusChannels = 8;
@@ -21,7 +22,17 @@ s.waitForBoot({
 		Buffer.readChannel(s, sf.fullPath, channels:[0]);
 	})
 	);
+	~buffers.add(\twists -> PathName("/Users/Dataexcess/Desktop/SO-ON/TOKYO/SAMPLES/TWISTS/").entries.collect({
+		arg sf;
+		Buffer.readChannel(s, sf.fullPath, channels:[0]);
+	})
+	);
 	~buffers.add(\sharp -> PathName("/Users/Dataexcess/Desktop/SO-ON/TOKYO/SAMPLES/SHARP/").entries.collect({
+		arg sf;
+		Buffer.readChannel(s, sf.fullPath, channels:[0]);
+	})
+	);
+	~buffers.add(\bea5 -> PathName("/Users/Dataexcess/Desktop/SO-ON/TOKYO/SAMPLES/BEA5/").entries.collect({
 		arg sf;
 		Buffer.readChannel(s, sf.fullPath, channels:[0]);
 	})
@@ -37,24 +48,25 @@ s.waitForBoot({
 //test to see if buffers are loaded
 ~buffers[\planets].choose.play
 
-//-STEP-2. create NDef maker function
 (
-~nDefMaker = {
+//-STEP-2. create NDef maker function
+
+~nDefMaker_GRAIN = {
 	arg name;
 
 	Ndef(name, {
 		arg gDens = 20, gMul = 1.0,
 		sDur = 1.0, sPos = 0.5, sSpeed = 1.0, sDetune = 0.1,
-		pDis = 1, pFreq = 2, pPos = 0.0, pSpread = 0.0, pWidth = 2, pMix = 0.0,
+		pFreq = 2, pPos = 0.0, pSpread = 0.07, pWidth = 2, pDirection = 1, pMix = 0.0, pSource = 0,
 		eFreq = 12, eAtt = 0.001, eRel = 0.1, eMix = 0.0,
 		fFreq = 60, fQ = 0.8, fDetune = 0.2,
 		sFreq = 0,
 
 		buffer = ~testBuf.bufnum.postln,
-		//buffer = ~buffers[\bees][0].bufnum,
-		amp = 1.0;
 
-		var pointer, detune, sig, env, pan;
+		amp = 0.0;
+
+		var pointer, detune, sig, env, panMod, pan;
 
 		pointer = LFTri.kr((1/(BufDur.kr(buffer) * sDur)) * sSpeed).range(0.0, sDur);
 
@@ -81,7 +93,9 @@ s.waitForBoot({
 			)
 		);
 
-		pan = (pPos + (pMix * LFSaw.kr(pFreq).range(-1.0,1.0))).wrap(-1.0,1.0); //.pow(pDis)
+		panMod = Select.kr(pSource, [LFSaw.kr(pFreq), SinOsc.kr(pFreq), LFNoise1.kr(pFreq)]).range(-1.0,1.0);
+
+		pan = (pPos + (pMix * (panMod * (1 - (2 * pDirection))))).wrap(-1.0,1.0);
 		sig = SplayAz.ar(6, sig, pSpread, 1, pWidth, pan);
 
 		SendReply.kr(Impulse.kr(60), ('/' ++ name).asSymbol, [pan, pWidth]);
@@ -94,19 +108,20 @@ s.waitForBoot({
 
 	//Ndef GUI
 	Ndef(name).addSpec(\gDens, [1/4, 60, \exp, 0.01].asSpec);
-	Ndef(name).addSpec(\gMul, [0.001, 2.0, \exp, 0.00001].asSpec);
+	Ndef(name).addSpec(\gMul, [0.001, 2.0, \lin, 0.00001].asSpec);
 
 	Ndef(name).addSpec(\sPos, [0.0, 1.0, \lin, 0.01].asSpec);
 	Ndef(name).addSpec(\sDur, [0.01, 1.0, \lin, 0.01].asSpec);
-	Ndef(name).addSpec(\sSpeed, [1/8, 8, \exp, 0.0001].asSpec);
+	Ndef(name).addSpec(\sSpeed, [1/16, 16, \exp, 0.0001].asSpec);
 	Ndef(name).addSpec(\sDetune, [0.01, 1.0, \lin, 0.0001].asSpec);
 	Ndef(name).addSpec(\sFreq, [-24, 24, \lin, 1].asSpec);
 
 	Ndef(name).addSpec(\pPos, [-1.0, 1.0, \lin, 0.0001].asSpec);
 	Ndef(name).addSpec(\pFreq, [1/20, 200, \exp, 0.0001].asSpec);
-	Ndef(name).addSpec(\pDis, [1/20, 20, \exp, 0.0001].asSpec);
-	Ndef(name).addSpec(\pSpread, [0.0, 1.0, \lin, 0.0001].asSpec);
 	Ndef(name).addSpec(\pWidth, [1.0, 6.0, \lin, 0.0001].asSpec);
+	Ndef(name).addSpec(\pSpread, [0.0, 1.0, \lin, 0.0001].asSpec);
+	Ndef(name).addSpec(\pDirection, [0, 1, \lin, 1].asSpec);
+	Ndef(name).addSpec(\pSource, [0, 2, \lin, 1].asSpec);
 
 	Ndef(name).addSpec(\pMix, [0.0, 1.0, \lin, 0.0001].asSpec);
 
@@ -118,44 +133,28 @@ s.waitForBoot({
 	Ndef(name).addSpec(\fFreq, [21, 10000, \exp, 0.0001].asSpec);
 	Ndef(name).addSpec(\fQ, [0.15, 0.95, \exp, 0.0001].asSpec);
 	Ndef(name).addSpec(\fDetune, [0.0, 1.0, \lin, 0.0001].asSpec);
+	Ndef(name).addSpec(\amp, [0.0, 1.0, \lin, 0.0001].asSpec);
 }
 )
 
-~animating = true; //true;
-~setting = true;
-
 (
-var name = "_._sharpp";
+//-STEP-3. creature maker function
 
-~creatures.clear;
-~creatures = Dictionary.new;
-
-~creatureMaker.(name);
-// ~creatures[name.asSymbol][\audio].set(\buffer, ~buffers[\planets][4].bufnum);
-~creatures[name.asSymbol][\audio].set(\buffer, ~buffers[\sharp][0].bufnum);
-
-)
-
-true.asBoolean
-0.asBoolean
-
-(
-var pointFromAngleAndDistance;
+var pointFromAngleAndDistance,
+windowSize = 750, circleSize = 650, dotSize = 20, halfCircleSize = circleSize/2.0;
 
 pointFromAngleAndDistance = {
 	arg angle, dist;
-	var distance = dist.linlin(1.5,6.0,190,0);
-	(200@200) + ((distance@0).rotate(angle.linlin(-1,1,-pi,pi)).rotate(-pi/2));
+	var distance = dist.linlin(1.5,6.0,halfCircleSize-(dotSize/2.0),0);
+	(halfCircleSize@halfCircleSize) + ((distance@0).rotate(angle.linlin(-1,1,-pi,pi)).rotate(-pi/2));
 };
 
 ~creatureMaker = {
-	arg name;
+	arg name, ndefFunction;
 	var dict, audio, visual, callback;
 
-	audio = ~nDefMaker.(name.asSymbol);
+	audio = ndefFunction.(name.asSymbol);
 	audio.gui;
-	audio.set(\buffer, ~testBuf.bufnum);
-	audio.set(\sFreq, rrand(0,12).nearestInScale(Scale.lydian));
 
 	visual = {
 		var font, rect;
@@ -199,9 +198,165 @@ pointFromAngleAndDistance = {
 	dict.put(\visual, visual);
 
 	~creatures.put(name.asSymbol, dict);
-}
+};
 
+~creatureRemover = {
+	arg name;
+	~creatures[name.asSymbol][\visual].close;
+	~creatures[name.asSymbol][\audio].stop;
+	~creatures.removeAt(name.asSymbol);
+}
 )
+
+(
+//-STEP-4. GUI maker
+
+~guiMaker = {
+
+	var windowSize, circleSize, halfCircleSize, circleOffset, dotSize, backgroundView, angleText, distanceText, animateToggle, nameText, selectedCreature, clickOffset, angleFromPoint, distanceFromPoint;
+	selectedCreature = nil;
+	clickOffset = 0@0;
+	windowSize = 750;
+	circleSize = 650;
+	halfCircleSize = circleSize/2.0;
+	circleOffset = (windowSize-circleSize)/2.0;
+	dotSize = 20;
+	angleFromPoint = {arg point; (point - (halfCircleSize@halfCircleSize)).rotate(pi/2).theta.linlin(-pi,pi,-1,1) };
+	distanceFromPoint = {arg point; (point - (halfCircleSize@halfCircleSize)).dist(0@0).linlin(0,(halfCircleSize-(dotSize/2)),6.0,1.5) };
+
+	~window = Window.new("PALAIS TOKYO", Rect(20, 20, windowSize, windowSize))
+	.front
+	.background_(Color.blue);
+
+	backgroundView = UserView(~window, Rect(circleOffset, circleOffset, circleSize, circleSize))
+	.background_(Color.blue)
+	.drawFunc_({
+		arg view;
+		var rect = Rect(((view.bounds.width/2)-dotSize),-10,dotSize,dotSize);
+		Pen.addOval(Rect(dotSize/2.0, dotSize/2.0, view.bounds.width-dotSize, view.bounds.height-dotSize));
+		Color.white.set;
+		Pen.stroke;
+
+		Pen.push;
+		Pen.translate((view.bounds.width/2),(view.bounds.height/2));
+		Pen.fillOval(rect);
+		5.do{
+			Pen.rotate((1/3)*pi);
+			Pen.fillOval(rect);
+		};
+		Pen.pop;
+	});
+
+
+	nameText = StaticText(~window, Rect(20, 20, 200, 20)).stringColor_(Color.white);
+	distanceText = StaticText(~window, Rect(20, 40, 200, 20)).stringColor_(Color.white);
+	angleText = StaticText(~window, Rect(20, 60, 200, 20)).stringColor_(Color.white);
+	animateToggle = Button(~window, Rect(windowSize - 80, 20, 60, 20))
+	.states_([["static",Color.white, Color.blue],["auto",Color.white, Color.blue]])
+	.action_({
+		arg button;
+		~animating = button.value
+	});
+
+	~interactionView = UserView(~window, Rect(circleOffset, circleOffset, circleSize, circleSize))
+	.mouseDownAction_({ |v, x, y|
+		~creatures.values.do { |creature, i|
+
+			if(creature[\visual].bounds.contains(x@y)) {
+				selectedCreature = creature;
+				clickOffset = Point(x, y) - creature[\visual].bounds.origin;
+			}
+		}
+	})
+	.mouseMoveAction_({ |v, x, y|
+		if(selectedCreature.notNil) {
+			var dist;
+			dist = ((x@y) - (halfCircleSize@halfCircleSize)).dist(0@0).linlin(0,(halfCircleSize-(dotSize/2)),0.0,1.0);
+
+			if (dist < 0.994) {
+				var creatureRect, angle, distance;
+				creatureRect = selectedCreature[\visual].bounds;
+				angle = angleFromPoint.(creatureRect.center);
+				distance = distanceFromPoint.(creatureRect.center);
+
+				selectedCreature[\visual].bounds = Rect(
+					x - clickOffset.x,
+					y - clickOffset.y,
+					creatureRect.width,
+					creatureRect.height
+				);
+				angleText.string = "angle: " + angle.round(1e-4);
+				distanceText.string = "width: " + distance.round(1e-4);
+				nameText.string = "moving " + selectedCreature[\visual].string;
+
+				selectedCreature[\audio].set(\pPos, angle);
+				selectedCreature[\audio].set(\pWidth, distance);
+			};
+
+			~window.refresh;
+		}
+	})
+	.mouseUpAction_({
+		if (selectedCreature.notNil) {
+			selectedCreature = nil;
+		}
+	});
+}
+)
+
+(
+var control, device;
+//-STEP-5. INITIALISE MIDI
+MIDIIn.connect;
+device = MIDIIn.findPort("Faderfox UC4","Faderfox UC4");
+MIDIIn.connect(0, device);
+
+control = {
+	arg src, chan, num, val;
+
+	8.do{
+		arg i;
+		if (num == (32 + i))
+		{
+			if (i < ~creatures.values.size)
+			{
+				~creatures.asSortedArray[i][1][\audio].set(\amp,[0,127].asSpec.unmap(val));
+			}
+		}
+	}
+};
+MIDIIn.addFuncTo(\control, control);
+)
+
+(
+//-STEP-5. INITIALISE STUFF
+
+~animating = false;
+~creatures.clear;
+~creatures = Dictionary.new;
+~guiMaker.value
+)
+
+~creatureRemover.("G_:::_");
+
+(
+//-STEP-6. CREATE CREATURES
+var name = "\//_\\/";
+~creatureMaker.(name, ~nDefMaker_GRAIN);
+~creatures[name.asSymbol][\audio].set(\buffer, ~buffers[\planets][3].bufnum);
+)
+
+(
+var name = "2_BUF_PLANET_II";
+~creatureMaker.(name, ~nDef_maker_PLAYBUF);
+~creatures[name.asSymbol][\audio].set(\buffer, ~buffers[\planets][2].bufnum);
+)
+
+(
+var name = "8]]~___~";
+~creatureMaker.(name, ~nDef_maker_BUGR);
+)
+
 
 CmdPeriod.add({
 	~creatures.values.do({
@@ -210,91 +365,13 @@ CmdPeriod.add({
 		window = creature[\audio].gui;
 		"YOOOO".postln;
 		window.postln;
+		{ window.close }.defer;
 		window.close;
 	});
 	~window.close;
+	~creatures.clear;
 });
 
-
-(
-
-var backgroundView, angleText, distanceText, animateToggle,
-selectedCreature = nil, clickOffset = 0@0, angleFromPoint, distanceFromPoint;
-
-angleFromPoint = {arg point; ((point - (200@200)).rotate(pi/2).theta).linlin(-pi,pi,-1,1) };
-distanceFromPoint = {arg point; (point - (200@200)).dist(0@0).linlin(0,190,6.0,1.5) };
-
-~window = Window.new("PALAIS TOKYO", Rect(20, 20, 600, 600)).front; //background_(Color.blue)
-backgroundView = UserView(~window, Rect(100, 100, 400, 400))
-.background_(Color.blue)
-.drawFunc_({
-	arg view;
-	var dotSize = 20, rect = Rect(((view.bounds.width/2)-dotSize),-10,dotSize,dotSize);
-	Pen.addOval(Rect(0, 0, view.bounds.width, view.bounds.height));
-	Color.white.set;
-	Pen.stroke;
-
-	Pen.push;
-	Pen.translate((view.bounds.width/2),(view.bounds.height/2));
-	Pen.fillOval(rect);
-	5.do{
-		Pen.rotate((1/3)*pi);
-		Pen.fillOval(rect);
-	};
-	Pen.pop;
-});
-
-angleText = StaticText(~window, Rect(100, 80, 200, 20));
-distanceText = StaticText(~window, Rect(320, 80, 200, 20));
-animateToggle = Button(~window, Rect(100, 40, 100, 20))
-.states_([["static",Color.black, Color.white],["animate",Color.black, Color.white]])
-.action_({
-	arg button;
-	~animating = button.value
-});
-
-~interactionView = UserView(~window, Rect(100, 100, 400, 400))
-.mouseDownAction_({ |v, x, y|
-	~creatures.values.do { |creature, i|
-		if(creature[\visual].bounds.contains(x@y)) {
-			selectedCreature = creature;
-			clickOffset = Point(x, y) - creature[\visual].bounds.origin;
-		};
-	};
-})
-.mouseMoveAction_({ |v, x, y|
-	if(selectedCreature.notNil) {
-		var dist;
-		dist = ((x@y) - (200@200)).dist(0@0).linlin(0,190,0.0,1.0);
-		if (dist < 0.994) {
-			var creatureRect, angle, distance;
-			creatureRect = selectedCreature[\visual].bounds;
-			angle = angleFromPoint.(creatureRect.center);
-			distance = distanceFromPoint.(creatureRect.center);
-
-			selectedCreature[\visual].bounds = Rect(
-				x - clickOffset.x,
-				y - clickOffset.y,
-				creatureRect.width,
-				creatureRect.height
-			);
-			angleText.string = "angle: " + angle;
-			distanceText.string = "width: " + distance;
-
-			if (~setting) {
-				selectedCreature[\audio].set(\pPos, angle);
-				selectedCreature[\audio].set(\pWidth, distance);
-			}
-		};
-
-		~window.refresh;
-	}
-})
-.mouseUpAction_({
-	selectedCreature = nil;
-});
-
-)
 
 Ndef(\gran2).set(\buffer, ~buffers[\planets][4].bufnum);
 Ndef(\gran2).set(\buffer, ~buffers[\planets][1].bufnum);
